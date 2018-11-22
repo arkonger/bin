@@ -1,0 +1,12 @@
+#!/bin/bash
+
+procInfo=`sl $1 | head -1`
+process=`echo $procInfo | awk '{print $1}'`
+kill $process 2> /dev/null
+if [ $? -ne 0 ]
+then
+  echo "Process not found."
+  exit
+fi
+echo Killed process:
+echo $procInfo

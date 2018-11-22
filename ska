@@ -1,0 +1,3 @@
+#!/bin/bash
+
+for PID in `ps -u $USER | grep -e " $1" | awk '{print $1}'`; do kill $PID; done

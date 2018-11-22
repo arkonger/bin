@@ -1,0 +1,3 @@
+#!/bin/bash
+
+echo $@ | sed -E 's/[[:blank:]]/\n/g'
