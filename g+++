@@ -1,0 +1,15 @@
+#!/bin/bash
+
+if [ $# -lt 1 ]; then
+  echo "g+++: Error: no arguments specified. Exiting."
+  exit 1
+fi
+
+for arg in "$@"; do
+  if [ "$arg" = "-o" ]; then
+    echo "g+++: Error: cannot use this with an output specified. Exiting."
+    exit 1
+  fi
+done
+
+g++ "$@" -o /dev/null
