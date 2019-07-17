@@ -9,7 +9,7 @@ else
   IFS=$'\n'
   for proc in `ps -u $USER | grep -e " $1" | grep -v -E "(grep|\/sl)"`
   do
-    echo "$USER process:"
+    echo "$USER's process:"
     FOUND=1
     echo $proc
   done
