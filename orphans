@@ -1,0 +1,57 @@
+#!/bin/bash
+
+# TODO: Add command-line flags to control behavior
+#       - [ ] Use pacman by default, but add a flag to use yay
+#       - [x] Print a list instead of removing
+#       - [x] Print the number
+
+O=$(yay -Qtdq)
+
+c=$(echo $O | wc -w)
+
+orphan_check () {
+  if [ $c -eq 0 ]; then
+    echo "There are no orphans!"
+    exit 0
+  fi
+}
+
+remove () {
+  orphan_check
+
+  yay -Rs $O
+}
+
+print_help () {
+  echo "A command-line utility to remove orphaned packages."
+  echo "Usage: orphans [OPTIONS]"
+  echo -e "\t-c, --count:\tPrint number of orphans"
+  echo -e "\t-l, --list:\tList the orphans"
+  echo -e "\t-r, --remove:\tRemove the orphans"
+  echo -e "\t-h, --help:\tPrint this help message"
+}
+
+if [[ $# -eq 0 ]]; then
+  print_help && exit 0
+else
+  for i in $@; do
+    case $i in
+      "-h" | "--help")
+        print_help && exit 0
+        ;;
+      "-c" | "--count")
+        echo $c
+        ;;
+      "-l" | "--list")
+        orphan_check
+        echo $O
+        ;;
+      "-r" | "--remove")
+        remove && exit 0
+        ;;
+      *)
+        echo "Unrecognized option: $i ... Exiting." && exit 1
+        ;;
+    esac
+  done
+fi

@@ -1,0 +1,370 @@
+#!/bin/bash
+
+# Print help message
+function print_help {
+  echo "Usage: timer [OPTIONS]"
+  echo -e '\t-b, --bell\tPlay a bell when time is up'
+  echo -e '\t-f, --flash\tFlash the screen when time is up'
+  echo -e '\t-t, --time\tSet the time until the timer goes off'
+  echo -e '\t\t\tIf this option is not provided, the timer will go off'
+  echo -e '\t\t\timmediately'
+  echo -e '\t-p, --pomodoro\tStart in pomodoro mode'
+  echo -e '\t-h, --help\tPrint this message'
+}
+
+# Parse time string
+function get_time {
+  # Check that the time is in the correct format
+  if [[ $1 =~ ^[[:digit:]]+[smhd]?$ ]]; then
+    local UNIT=`grep -o '[smhd]$' <(echo $1) || echo s`
+    TIME=`grep -Po '[[:digit:]]+' <(echo $1)`
+    
+    # Convert time to seconds
+    case $UNIT in
+      's')
+        # Nothing to do
+        return
+        ;;
+      'm')
+        ((TIME *= 60))
+        ;;
+      'h')
+        ((TIME *= 60*60))
+        ;;
+      'd')
+        ((TIME *= 60*60*24))
+        ;;
+    esac
+  else
+    echo -e "Error:\tBad time provided"
+    echo -e "\tTime can be an integer number, optionally suffixed with one of"
+    echo -e "\t[s]econds, [m]inutes, [h]ours, or [d]ays. If no suffix is"
+    echo -e "\tprovided, the default of 's' is applied.\n"
+    print_help
+    exit 1
+  fi
+}
+
+# Print a report about completed pomodoros using pomicons
+function pom_report {
+  local RED='\e[38;2;255;0;0m'
+  local BROWN='\e[38;2;170;68;68m'
+  local YELLOW='\e[38;2;255;255;0m'
+  local DEF='\e[0m'
+
+  echo 'Final pomodoro count:'
+  printf "%d $RED\uE001$DEF " $POMS
+  printf "%d $BROWN\uE004$DEF (" $SQSH
+  printf "%d $RED\uE009$DEF " $INT
+  printf "%d $YELLOW\uE00A$DEF)\n" $EXT
+
+  printf '\nYou were productive for at least %d minutes!\n' $(($POMS * 25))
+  
+  # Restore normal  operation so the user isn't trapped instead [BADUM-TSS]
+  trap SIGINT
+  exit
+}
+
+# Function to track length of break
+function break_time {
+  echo "Press enter when you're ready to get back to work"
+
+  # Duration of the break so far
+  local LEN=0
+  # Icons to display
+  local SHORT_ICON='\e[38;2;170;68;68m\uE005\e[0m'
+  local LONG_ICON='\e[38;2;96;255;96m\uE006\e[0m'
+  local AWAY_ICON='\e[38;2;255;255;255m\uE007\e[0m'
+
+  # Set an arbitrary starting value so we can see when it's changed
+  REPLY=0
+
+  # Disregard input besides the empty string (enter)
+  while [[ -n $REPLY ]]; do
+    # Display the appropriate icon
+    if [[ $LEN -lt 10*60 ]]; then
+      # A short break is less than 10 mins
+      echo -ne "\e[G$SHORT_ICON"
+    elif [[ $LEN -lt 50*60 ]]; then
+      # This is now counted as a long break, which can last indefinitely (but
+      #   we change the icon again after another 40 mins)
+      echo -ne "\e[G$LONG_ICON"
+    else
+      echo -ne "\e[G$AWAY_ICON"
+    fi
+
+    read -s -n 1 -t 1 || { ((LEN++)); REPLY=0; }
+  done
+
+  if [[ $LEN -lt 10*60 && $SHORT -lt 3 ]]; then ((SHORT++)); return; fi
+  SHORT=0
+}
+
+# Auto-start timers based on the pomodoro system
+function pomodoro {
+  # Number of short breaks taken
+  SHORT=${SHORT-0}
+
+  # Main pom loop
+  while true; do
+    # Trap  so that the user can interrupt a pom
+    trap "squash" INT
+    # Start a pom
+    timer -b -t 25m
+    # Trap to pom_report instead
+    trap "pom_report" INT
+
+    # This code is only reachable after a successful pom
+    ((POMS++))
+    if [[ $SHORT -lt 3 ]]; then
+      echo "Good job! Take a short (2-5 min) break"
+      break_time
+    else
+      echo "Great work! Take a long (10-30 min) break. You've earned it!"
+      break_time
+    fi
+    echo ''
+
+    # Check whether to keep going or exit
+    while true; do
+      read -n 1 -p 'Would you like to start another? (Y/n) '
+      echo ''
+      case $REPLY in
+        "y" | "" | " ")
+          break
+          ;;
+        "n")
+          pom_report
+          ;;
+        *)
+          echo -ne "Unrecognized option: "
+          echo $REPLY
+          echo "Type 'y' for yes (default if left blank), or 'n' for no"
+          ;;
+      esac
+    done
+  done
+}
+
+# Trap SIGINTs for a squashed pomodoro
+#   Return: 1 if external, 0 if internal
+function squash {
+  ((SQSH++))
+  # Clear the line & reset the cursor
+  echo -ne '\e[G\e[2K'
+  while true; do
+    read -n 1 -p "Was this an (i)nternal or (e)xternal interruption? "
+    echo ''
+    case $REPLY in
+      "i")
+        ((INT++))
+        break
+        ;;
+      "e")
+        ((EXT++))
+        break
+        ;;
+      *)
+        echo -ne "Unrecognized option: "
+        echo $REPLY
+        echo "Type 'i' for internal, or 'e' for external"
+        ;;
+    esac
+  done
+
+  # Check whether to keep going or exit
+  while true; do
+    read -n 1 -p 'Gotcha. Would you like to start another? (Y/n) '
+    echo ''
+    case $REPLY in
+      "y" | "" | " ")
+        pomodoro
+        ;;
+      "n")
+        pom_report
+        ;;
+      *)
+        echo -ne "Unrecognized option: "
+        echo $REPLY
+        echo "Type 'y' for yes (default if left blank), or 'n' for no"
+        ;;
+    esac
+  done
+}
+
+# Set defaults
+BELL=false
+FLASH=false
+
+# Input Parsing
+for (( i=1; $i <= $#; i++ )); do
+  case ${!i} in
+    # Play a bell when time is up
+    "-b" | "--bell")
+      BELL=true
+      ;;
+    # Flash the screen when time is up
+    "-f" | "--flash")
+      FLASH=true
+      ;;
+    # Set the time until it goes off
+    "-t" | "--time")
+      # Get the next argument, pass it to get_time()
+      ((i++))
+      # Check that there is a next argument
+      if [[ $i -gt $# ]]; then
+        echo -e "Error: No time provided!\n"
+        print_help
+        exit 1
+      fi
+      get_time ${!i}
+      ;;
+    # Set the script to run in pomodoro mode
+    "-p" | "--pomodoro")
+      POMS=0
+      SQSH=0
+      INT=0
+      EXT=0
+      pomodoro
+      ;;
+    # Print the help message
+    "-h" | "--help")
+      print_help
+      exit 0
+      ;;
+    # Default case (unknown option)
+    *)
+      echo -n "Error: Unrecognized option: "
+      echo ${!i}
+      echo ''
+      print_help
+      exit 1
+  esac
+done
+
+function times_up {
+  # Flush stdin to discard any accidental keypresses
+  while read -n 1 -t 0.01; do
+    unset REPLY;
+  done
+  echo -ne '\e[2K\e[G'
+
+  echo "Time's up!"
+  while $BELL || $FLASH; do
+    if $BELL; then echo -ne '\007'; fi
+    if $FLASH; then echo -ne '\e[?5h'; fi
+    sleep 0.5
+    echo -ne '\e[?5l'
+    read -s -n 1 -t 0.5 && break
+  done
+  # Reset cursor
+  echo -ne '\e[G'
+  # Clear the typed character
+  echo -ne '\e[2K'
+}
+
+# Format time remaining
+function time_string {
+  t=$1
+  if [[ $t -ge 60*60*24 ]]; then
+    local DAYS=$(($t / (60*60*24)))
+    ((t %= 60*60*24))
+    local HOURS=$(($t / (60*60)))
+    ((t %= 60*60))
+    local MINS=$(($t / 60))
+    ((t %= 60))
+    printf '%dd, %02d:%02d:%02d' $DAYS $HOURS $MINS $t
+  elif [[ $t -ge 60*60 ]]; then
+    local HOURS=$(($t / (60*60)))
+    ((t %= 60*60))
+    local MINS=$(($t / 60))
+    ((t %= 60))
+    printf '%02d:%02d:%02d' $HOURS $MINS $t
+  elif [[ $t -ge 60 ]]; then
+    local MINS=$(($t / 60))
+    ((t %= 60))
+    printf '%02d:%02d' $MINS $t
+  else
+    printf '%02d' $t
+  fi
+}
+
+# Print a pretty status bar using FiraCode
+#   Args: 
+#     $1: length of the time string
+function print_progress_bar {
+  # Get width of terminal for formatting purposes
+  COL=$(stty -a | grep -Po "(?<=columns )\d+")
+
+  # Width of the progress bar
+  WIDTH=$(($COL - $1 - 2))
+  # Number of filled bar segments
+  PROG=`dc -e "3 k $WIDTH 1 $TIME_REM $TIME / - * 0 k 1 / p"`
+
+  # Set cursor to start position
+  echo -ne "\e[$(($1+2+1))G"
+  # Set fg to green
+  echo -ne '\e[38;2;96;255;96m'
+  for (( i=1; $i + $1 + 2 <= $COL; i++ )); do
+    if [[ $i -le $PROG ]]; then
+      if [[ $i -eq 1 ]]; then
+        echo -ne '\uEE03'
+      elif [[ $i+$1+2 -eq $COL ]]; then
+        echo -ne '\uEE05'
+      else
+        echo -ne '\uEE04'
+      fi
+    else
+      if [[ $i -eq 1 ]]; then
+        echo -ne '\uEE00'
+      elif [[ $i+$1+2 -eq $COL ]]; then
+        echo -ne '\uEE02'
+      else
+        echo -ne '\uEE01'
+      fi
+    fi
+  done
+
+  # Set color back to normal
+  echo -ne '\e[0m'
+
+  # Calculate the next time the bar needs redrawn
+  # PROG = WIDTH * (1 - TIME_REM / TIME)
+  #   => TIME_REM = TIME * (1 - PROG / WIDTH)
+  #   => NEXT_REDRAW = TIME * (1 - (PROG + 1) / WIDTH)
+  NEXT_REDRAW=`dc -e "3 k $TIME 1 $PROG 1 + $WIDTH / - * 0 k 1 / p"`
+}
+
+if [[ -n $TIME ]]; then
+  # If not set, default to $TIME
+  TIME_REM=${TIME_REM-$TIME}
+  # Set starting value to be changed later
+  TS_LEN=0
+
+  while [[ $TIME_REM -ge 0 ]]; do
+    # Formatted string of time remaining
+    TS=`time_string $TIME_REM`
+    # Length of time string
+    TS_LEN_1=`echo -n $TS | wc -m`
+
+    # The progress bar need only be redrawn when the length of the time string
+    #   changes, or when the bar needs to be updated. The later is set by
+    #   print_progress_bar()
+    if [[ $TS_LEN_1 -ne $TS_LEN || $TIME_REM -le $NEXT_REDRAW ]]; then
+      # Clear the line so that nothing is left from previous time strings
+      echo -ne '\e[2K'
+      TS_LEN=$TS_LEN_1
+      print_progress_bar $TS_LEN
+    fi
+    # Set up cursor
+    echo -ne '\e[2G'
+    echo -n $TS
+
+    # Tick once
+    ((TIME_REM--))
+    if [[ $TIME_REM -lt 0 ]]; then break; fi
+    sleep 1
+  done
+  echo ''
+fi
+times_up
