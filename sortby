@@ -1,0 +1,128 @@
+#!/bin/bash
+
+print_help() {
+  echo -n 'Usage: sortby [OPTIONS] [FILE] [SORT_COLUMN_1] [SORT_OPTIONS_1]'
+  echo ' [[SORT_COLUMN_2] [SORT_OPTIONS_2]...]'
+
+  echo -e '\t-H, --headers:\tindicates that the table has headers to preserve'
+  echo -e '\t-h, --help:\tPrint this help and exit\n'
+  
+  echo -e '\tIf FILE is given as "-", read from \e[1mstdin\e[0m\n'
+
+  echo -ne '\tSORT_COLUMNS are given as a decimal number, indexed from 1, '
+  echo 'in decreasing order of precedence'
+  echo -ne '\tSORT_OPTIONS are passed to sort on each respective sort '
+  echo '("--stable" is implied)'
+}
+
+# Defaults
+HEADER=false
+
+# Input parsing
+for (( i=1; $i <= $#; i++ )); do
+  # Check for OPTIONS
+  if [[ $i -eq 1 ]]; then
+    # There are options
+    if [[ ${!i} =~ ^-.+$ ]]; then
+      case ${!i} in
+        "-H" | "--headers")
+          HEADER=true
+          ;;
+        "-h" | "--help")
+          print_help && exit 0
+          ;;
+        *)
+          echo 'Unknown option: '${!i}'...Exiting'
+          print_help && exit 1
+          ;;
+      esac
+
+      # Since there are options, the file is the second argument
+      FILE=$2
+      (( i++ ))
+      continue
+
+    # There are no options; since there are no options, the file is the first
+    #   argument
+    else
+      FILE=$1
+      continue
+    fi
+  fi
+
+  # The rest of the arguments should be sort instructions. For now, we only
+  #   check that they look correct. 
+  if [[ ${!i} =~ ^[[:digit:]]+$ ]]; then
+    continue
+  elif [[ ${!i} =~ ^-.+$ ]]; then
+    continue
+  else
+    echo 'Bad argument: '${!i}'...Exiting'
+    print_help && exit 1
+  fi
+done
+
+# Read from stdin
+if [[ $FILE =~ ^-$ ]]; then
+  INPUT=`cat`
+else
+  INPUT=`cat $FILE`
+fi
+# Separate headers
+if $HEADER; then
+  HEADER_ROW=`echo "$INPUT" | head -n 1 | sed -E "s/[[:space:]]+/,/g"`
+  INPUT=`echo "$INPUT" | tail -n +2`
+fi
+
+# Function to perform awking & sorting
+do_sort() {
+  INPUT=`echo "$INPUT" |\
+    awk -v sort_col=$COLUMN '{ print $sort_col, $0 }' |\
+    sort $SORT_ARGS |\
+    awk '{ for (i = 2; i <= NF; i++) { printf "%s ", $i }
+      print "" }'`
+}
+
+# Begin sorting. Since the lowest precedence sort is at the end, we work
+#   back-to-front
+# Args:
+#   COLUMN:     Column to sort by
+#   SORT_ARGS:  Args to pass to sort
+#   HAS_ARGS:   Whether any SORT_ARGS have been defined. This is used to
+#                 detect sort args with no corresponding column
+COLUMN=-1
+SORT_ARGS="--stable"
+HAS_ARGS=false
+for (( i = $#; 1; i-- )); do
+  # Go backwards until we reach the file
+  if [[ ${!i} == $FILE ]]; then break; fi
+
+  # If it starts with a hypen, it's a flag
+  if [[ ${!i} =~ ^-.+$ ]]; then
+    SORT_ARGS+=' '${!i}
+    HAS_ARGS=true
+  # If it's digits only, it's a column
+  elif [[ ${!i} =~ ^[[:digit:]]+$ ]]; then
+    COLUMN=${!i}
+    do_sort
+
+    # Reset variables to default
+    COLUMN=-1
+    SORT_ARGS="--stable"
+    HAS_ARGS=false
+  fi
+done
+
+# Catch sort args with no column given
+if $HAS_ARGS; then
+  echo -n "No column provided: Make sure you've specified all columns and try "
+  echo "again...Exiting"
+  print_help && exit 1
+fi
+
+# Print table
+if $HEADER; then
+  echo "$INPUT" | column --table -N $HEADER_ROW
+else
+  echo "$INPUT" | column --table
+fi
