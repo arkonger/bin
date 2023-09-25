@@ -1,0 +1,20 @@
+#!/bin/bash
+
+echo "Inhibiting xfce4-screensaver..."
+
+# Start an inhibit signal
+xfce4-screensaver-command --inhibit -r "nosleep script" &
+PID=$!
+
+echo "Press any key to resume:"
+# For some reason inhibit doesn't always work. As a backup, we can poke the
+#   screensaver every so often
+while true; do
+  read -s -n 1 -t 120 && break
+  xfce4-screensaver-command --poke
+done
+
+kill $PID && echo "Inhibition ended" || \
+  (echo "Could not end inhibition"; \
+    xfce4-screensaver-command --query; \
+    echo "Inhibit PID = $PID")

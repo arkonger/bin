@@ -1,7 +1,0 @@
-#!/bin/bash
-
-echo "Beginning poker...Press 'ctrl-C' to quit:"
-while true; do
-  xfce4-screensaver-command --poke
-  sleep 300
-done
