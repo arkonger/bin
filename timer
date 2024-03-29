@@ -303,6 +303,9 @@ function print_progress_bar {
 
   # Set cursor to start position
   echo -ne "\e[$(($1+2+1))G"
+  # Clears any text after the cursor; this commonly happens when resizing the
+  #   window. 
+  echo -ne "\e[J"
   # Set fg to green
   echo -ne '\e[38;2;96;255;96m'
   for (( i=1; $i + $1 + 2 <= $COL; i++ )); do
@@ -348,7 +351,7 @@ if [[ -n $TIME ]]; then
     TS_LEN_1=`echo -n $TS | wc -m`
 
     # The progress bar need only be redrawn when the length of the time string
-    #   changes, or when the bar needs to be updated. The later is set by
+    #   changes, or when the bar needs to be updated. The latter is set by
     #   print_progress_bar()
     if [[ $TS_LEN_1 -ne $TS_LEN || $TIME_REM -le $NEXT_REDRAW ]]; then
       # Clear the line so that nothing is left from previous time strings
