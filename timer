@@ -8,7 +8,10 @@ function print_help {
   echo -e '\t-t, --time\tSet the time until the timer goes off'
   echo -e '\t\t\tIf this option is not provided, the timer will go off'
   echo -e '\t\t\timmediately'
+  echo -e '\t-d, --date\tSet an expiration time using `date -d`'
   echo -e '\t-p, --pomodoro\tStart in pomodoro mode'
+  echo -e '\t-c, --compat\tStart in compatability mode, without depending'
+  echo -e '\t\t\ton any specific font'
   echo -e '\t-h, --help\tPrint this message'
 }
 
@@ -80,6 +83,7 @@ function break_time {
   REPLY=0
 
   # Disregard input besides the empty string (enter)
+  # TODO: Unroll this loop
   while [[ -n $REPLY ]]; do
     # Display the appropriate icon
     if [[ $LEN -lt 10*60 ]]; then
@@ -195,6 +199,9 @@ function squash {
 # Set defaults
 BELL=false
 FLASH=false
+COMPAT=false
+# Don't allow pomodoro & date TODO: make work as expected with -p
+POM_DATE=false
 
 # Input Parsing
 for (( i=1; $i <= $#; i++ )); do
@@ -219,13 +226,60 @@ for (( i=1; $i <= $#; i++ )); do
       fi
       get_time ${!i}
       ;;
+    # Set the time that it goes off
+    "-d" | "--date")
+      # Check that pomodoro hasn't been set
+      if $POM_DATE; then
+        echo "Error: Pomodoro mode can't be used with --date!"
+        echo 'Exiting!'
+        exit 1
+      else
+        POM_DATE=true
+      fi
+      # Get the next argument, compute seconds with `date`
+      ((i++))
+      if [[ $i -gt $# ]]; then
+        echo -e "Error: No time provided!\n"
+        print_help
+        exit 1
+      fi
+      # Get end time in seconds
+      END_SECS=$(date -d "${!i}" +%s)
+      if [[ $? != 0 ]]; then
+        echo -e "Error: Date failed! Exiting!\n"
+        exit 1
+      fi
+      # Get current time in seconds
+      NOW_SECS=$(date +%s)
+      # Get time delta
+      SECS=$(echo "$END_SECS - $NOW_SECS" | bc)
+      if [[ $SECS -lt 0 ]]; then
+        echo "Error: It doesn't look like that time is in the future!"
+        echo "Are you sure your formatting is correct?"
+        echo "Exiting!"
+        exit 1
+      fi
+      get_time $SECS
+      ;;
     # Set the script to run in pomodoro mode
     "-p" | "--pomodoro")
+      # Check that date hasn't been set
+      if $POM_DATE; then
+        echo "Error: Pomodoro mode can't be used with --date!"
+        echo 'Exiting!'
+        exit 1
+      else
+        POM_DATE=true
+      fi
       POMS=0
       SQSH=0
       INT=0
       EXT=0
       pomodoro
+      ;;
+    # Set compatability mode
+    "-c" | "--compat")
+      COMPAT=true
       ;;
     # Print the help message
     "-h" | "--help")
@@ -311,19 +365,43 @@ function print_progress_bar {
   for (( i=1; $i + $1 + 2 <= $COL; i++ )); do
     if [[ $i -le $PROG ]]; then
       if [[ $i -eq 1 ]]; then
-        echo -ne '\uEE03'
+        if $COMPAT; then
+          echo -n '['
+        else
+          echo -ne '\uEE03'
+        fi
       elif [[ $i+$1+2 -eq $COL ]]; then
-        echo -ne '\uEE05'
+        if $COMPAT; then
+          echo -n ']'
+        else
+          echo -ne '\uEE05'
+        fi
       else
-        echo -ne '\uEE04'
+        if $COMPAT; then
+          echo -n '='
+        else
+          echo -ne '\uEE04'
+        fi
       fi
     else
       if [[ $i -eq 1 ]]; then
-        echo -ne '\uEE00'
+        if $COMPAT; then
+          echo -n '['
+        else
+          echo -ne '\uEE00'
+        fi
       elif [[ $i+$1+2 -eq $COL ]]; then
-        echo -ne '\uEE02'
+        if $COMPAT; then
+          echo -n ']'
+        else
+          echo -ne '\uEE02'
+        fi
       else
-        echo -ne '\uEE01'
+        if $COMPAT; then
+          echo -n ' '
+        else
+          echo -ne '\uEE01'
+        fi
       fi
     fi
   done
@@ -338,11 +416,22 @@ function print_progress_bar {
   NEXT_REDRAW=`dc -e "3 k $TIME 1 $PROG 1 + $WIDTH / - * 0 k 1 / p"`
 }
 
+# Cancel gracefully without destroying the pretty progress bar
+function graceful_exit {
+  echo -ne "\e[2K\e[2GCANCELLED!"
+  print_progress_bar 10
+  echo ''
+  exit
+}
+
 if [[ -n $TIME ]]; then
   # If not set, default to $TIME
   TIME_REM=${TIME_REM-$TIME}
   # Set starting value to be changed later
   TS_LEN=0
+
+  # Trap SIGINT for graceful exits
+  trap "graceful_exit" SIGINT
 
   while [[ $TIME_REM -ge 0 ]]; do
     # Formatted string of time remaining
