@@ -61,7 +61,7 @@ function pom_report {
   printf "%d $RED\uE009$DEF " $INT
   printf "%d $YELLOW\uE00A$DEF)\n" $EXT
 
-  printf '\nYou were productive for at least %d minutes!\n' $(($POMS * 25))
+  printf '\nYou were productive for at least %d minutes!\n' $(($POMS * $TIME / 60))
   
   # Restore normal  operation so the user isn't trapped instead [BADUM-TSS]
   trap SIGINT
@@ -109,12 +109,22 @@ function pomodoro {
   # Number of short breaks taken
   SHORT=${SHORT-0}
 
+  # Build arg string for child processes
+  if [[ $TIME =~ ^$ ]]; then
+    ARGS="-t 25m"
+  else
+    ARGS="-t ${TIME}s"
+  fi
+  if $BELL; then ARGS="$ARGS -b"; fi
+  if $FLASH; then ARGS="$ARGS -f"; fi
+  if $COMPAT; then ARGS="$ARGS -c"; fi
+
   # Main pom loop
   while true; do
     # Trap  so that the user can interrupt a pom
     trap "squash" INT
     # Start a pom
-    timer -b -t 25m
+    timer $ARGS
     # Trap to pom_report instead
     trap "pom_report" INT
 
@@ -200,6 +210,7 @@ function squash {
 BELL=false
 FLASH=false
 COMPAT=false
+POM=false
 # Don't allow pomodoro & date TODO: make work as expected with -p
 POM_DATE=false
 
@@ -271,11 +282,11 @@ for (( i=1; $i <= $#; i++ )); do
       else
         POM_DATE=true
       fi
+      POM=true
       POMS=0
       SQSH=0
       INT=0
       EXT=0
-      pomodoro
       ;;
     # Set compatability mode
     "-c" | "--compat")
@@ -288,13 +299,13 @@ for (( i=1; $i <= $#; i++ )); do
       ;;
     # Default case (unknown option)
     *)
-      echo -n "Error: Unrecognized option: "
-      echo ${!i}
-      echo ''
+      echo "Error: Unrecognized option: ${!i}"
       print_help
       exit 1
   esac
 done
+
+if $POM; then pomodoro; fi
 
 function times_up {
   # Flush stdin to discard any accidental keypresses
