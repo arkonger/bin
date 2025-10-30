@@ -1,20 +1,29 @@
 #!/bin/bash
 
-echo "Inhibiting xfce4-screensaver..."
+# Location of the lock file
+LOCK="$HOME/.config/niri/scripts/locker-$WAYLAND_DISPLAY.lock"
 
-# Start an inhibit signal
-xfce4-screensaver-command --inhibit -r "nosleep script" &
-PID=$!
+# Cleanup function for TERM/INT signals
+function graceful_exit {
+  rm $LOCK && echo "Inhibition ended" || \
+    (echo "Could not end inhibition"; \
+     echo "Check for lock file at: $LOCK")
+  trap SIGTERM
+  trap SIGINT
+  exit
+}
 
+echo "Inhibiting screen locker..."
+
+# Create the lock file
+touch $LOCK || exit
+
+trap "graceful_exit" SIGTERM
+trap "graceful_exit" SIGINT
+
+# Wait for user input
 echo "Press any key to resume:"
-# For some reason inhibit doesn't always work. As a backup, we can poke the
-#   screensaver every so often
-while true; do
-  read -s -n 1 -t 120 && break
-  xfce4-screensaver-command --poke
-done
+read -s -n 1
 
-kill $PID && echo "Inhibition ended" || \
-  (echo "Could not end inhibition"; \
-    xfce4-screensaver-command --query; \
-    echo "Inhibit PID = $PID")
+# Remove lock file
+graceful_exit
