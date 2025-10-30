@@ -19,7 +19,7 @@ orphan_check () {
 remove () {
   orphan_check
 
-  yay -Rs $O
+  yay -Rsu $O
 }
 
 print_help () {
