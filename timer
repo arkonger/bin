@@ -435,6 +435,10 @@ function graceful_exit {
 }
 
 if [[ -n $TIME ]]; then
+  # Get start/end times using date:
+  START_TIME=$(date +%s)
+  END_TIME=$(($START_TIME + $TIME))
+
   # If not set, default to $TIME
   TIME_REM=${TIME_REM-$TIME}
   # Set starting value to be changed later
@@ -452,7 +456,7 @@ if [[ -n $TIME ]]; then
     # The progress bar need only be redrawn when the length of the time string
     #   changes, or when the bar needs to be updated. The latter is set by
     #   print_progress_bar()
-    if [[ $TS_LEN_1 -ne $TS_LEN || $TIME_REM -le $NEXT_REDRAW ]]; then
+    if [[ $TS_LEN_1 -ne $TS_LEN || $TIME_REM -le $NEXT_REDRAW && $TIME_REM -ne $TIME_REM_1 ]]; then
       # Clear the line so that nothing is left from previous time strings
       echo -ne '\e[2K'
       TS_LEN=$TS_LEN_1
@@ -462,10 +466,11 @@ if [[ -n $TIME ]]; then
     echo -ne '\e[2G'
     echo -n $TS
 
-    # Tick once
-    ((TIME_REM--))
+    # Update remaining time
+    TIME_REM_1=$TIME_REM
+    TIME_REM=$(( $END_TIME - $(date +%s) ))
     if [[ $TIME_REM -lt 0 ]]; then break; fi
-    sleep 1
+    sleep 0.1
   done
   echo ''
 fi
