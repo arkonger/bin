@@ -111,10 +111,9 @@ function pomodoro {
 
   # Build arg string for child processes
   if [[ $TIME =~ ^$ ]]; then
-    ARGS="-t 25m"
-  else
-    ARGS="-t ${TIME}s"
+    TIME=$((25 * 60))
   fi
+  ARGS="-t ${TIME}s"
   if $BELL; then ARGS="$ARGS -b"; fi
   if $FLASH; then ARGS="$ARGS -f"; fi
   if $COMPAT; then ARGS="$ARGS -c"; fi
