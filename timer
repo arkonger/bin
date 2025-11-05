@@ -447,59 +447,62 @@ function print_progress_bar {
   # Number of filled bar segments
   PROG=`dc -e "3 k $WIDTH 1 $TIME_REM $TIME / - * 0 k 1 / p"`
 
+  # Progress bar string, which we echo at end of function
+  BAR=""
   # Set cursor to start position
-  echo -ne "\e[$(($1+2+1))G"
+  BAR="$BAR\e[$(($1+2+1))G"
   # Clears any text after the cursor; this commonly happens when resizing the
   #   window. 
-  echo -ne "\e[J"
+  BAR="$BAR\e[J"
   # Set fg to green
-  echo -ne '\e[38;2;96;255;96m'
+  BAR="$BAR\e[38;2;96;255;96m"
   for (( i=1; $i + $1 + 2 <= $COL; i++ )); do
     if [[ $i -le $PROG ]]; then
       if [[ $i -eq 1 ]]; then
         if $COMPAT; then
-          echo -n '['
+          BAR="$BAR["
         else
-          echo -ne '\uEE03'
+          BAR="$BAR\uEE03"
         fi
       elif [[ $i+$1+2 -eq $COL ]]; then
         if $COMPAT; then
-          echo -n ']'
+          BAR="$BAR]"
         else
-          echo -ne '\uEE05'
+          BAR="$BAR\uEE05"
         fi
       else
         if $COMPAT; then
-          echo -n '='
+          BAR="$BAR="
         else
-          echo -ne '\uEE04'
+          BAR="$BAR\uEE04"
         fi
       fi
     else
       if [[ $i -eq 1 ]]; then
         if $COMPAT; then
-          echo -n '['
+          BAR="$BAR["
         else
-          echo -ne '\uEE00'
+          BAR="$BAR\uEE00"
         fi
       elif [[ $i+$1+2 -eq $COL ]]; then
         if $COMPAT; then
-          echo -n ']'
+          BAR="$BAR]"
         else
-          echo -ne '\uEE02'
+          BAR="$BAR\uEE02"
         fi
       else
         if $COMPAT; then
-          echo -n ' '
+          BAR="$BAR "
         else
-          echo -ne '\uEE01'
+          BAR="$BAR\uEE01"
         fi
       fi
     fi
   done
 
   # Set color back to normal
-  echo -ne '\e[0m'
+  BAR="$BAR\e[0m"
+  echo -ne "$BAR"
 
   # Calculate the next time the bar needs redrawn
   # PROG = WIDTH * (1 - TIME_REM / TIME)
@@ -516,6 +519,7 @@ function graceful_exit {
   exit
 }
 
+# Main loop
 if [[ -n $TIME ]]; then
   # Get start/end times using date:
   if [[ -z $START_TIME ]]; then
@@ -544,15 +548,15 @@ if [[ -n $TIME ]]; then
     #   print_progress_bar()
     if [[ $TS_LEN_1 -ne $TS_LEN || \
           ($TIME_REM -le $NEXT_REDRAW && $TIME_REM -ne $TIME_REM_1) \
-          ]]; then
+       ]]; then
       # Clear the line so that nothing is left from previous time strings
-      echo -ne '\e[2K'
+      # TODO: Is there any reason to keep this line clear?
+      # echo -ne '\e[2K'
       TS_LEN=$TS_LEN_1
       print_progress_bar $TS_LEN
     fi
-    # Set up cursor
-    echo -ne '\e[2G'
-    echo -n $TS
+    # Set up cursor & print time
+    echo -ne "\e[2G$TS"
 
     # Update remaining time
     TIME_REM_1=$TIME_REM
