@@ -11,6 +11,8 @@ function print_help {
   echo -e '\t-d, --date\tSet an expiration time using `date -d`'
   echo -e '\t-s, --start\tSet a custom start time to be parsed with `date -d`'
   echo -e '\t-r, --refresh\tSet the refresh rate of the timer'
+  echo -e '\t-R, --dynamic-refresh'
+  echo -e '\t\t\tAutomatically set refresh rate based on time remaining'
   echo -e '\t-p, --pomodoro\tStart in pomodoro mode'
   echo -e '\t-c, --compat\tStart in compatability mode, without depending'
   echo -e '\t\t\ton any specific font'
@@ -212,6 +214,7 @@ BELL=false
 FLASH=false
 COMPAT=false
 REFRESH=0.1
+DYN_REFRESH=false
 POM=false
 # Don't allow pomodoro & date
 POM_DATE=false
@@ -323,6 +326,10 @@ for (( i=1; $i <= $#; i++ )); do
       fi
       REFRESH=${!i}
       ;;
+    # Dynamically set refresh rate
+    "-R" | "--dynamic-refresh")
+      DYN_REFRESH=true
+      ;;
     # Set the script to run in pomodoro mode
     "-p" | "--pomodoro")
       # Check that date hasn't been set
@@ -407,6 +414,24 @@ function time_string {
     printf '%02d:%02d' $MINS $t
   else
     printf '%02d' $t
+  fi
+}
+
+# Get refresh rate
+function refresh_rate {
+  t=$1
+  if [[ $t -ge 60*60*24 ]]; then
+    # Set refresh rate 4/day
+    echo $((60*60*24/4))
+  elif [[ $t -ge 60*60 ]]; then
+    # Set refresh rate 4/hour
+    echo $((60*60/4))
+  elif [[ $t -ge 60 ]]; then
+    # Set refresh rate 4/minute
+    echo $((60/4))
+  else
+    # Set refresh rate 10/s
+    echo 0.1
   fi
 }
 
@@ -517,7 +542,9 @@ if [[ -n $TIME ]]; then
     # The progress bar need only be redrawn when the length of the time string
     #   changes, or when the bar needs to be updated. The latter is set by
     #   print_progress_bar()
-    if [[ $TS_LEN_1 -ne $TS_LEN || $TIME_REM -le $NEXT_REDRAW && $TIME_REM -ne $TIME_REM_1 ]]; then
+    if [[ $TS_LEN_1 -ne $TS_LEN || \
+          ($TIME_REM -le $NEXT_REDRAW && $TIME_REM -ne $TIME_REM_1) \
+          ]]; then
       # Clear the line so that nothing is left from previous time strings
       echo -ne '\e[2K'
       TS_LEN=$TS_LEN_1
@@ -531,6 +558,8 @@ if [[ -n $TIME ]]; then
     TIME_REM_1=$TIME_REM
     TIME_REM=$(( $END_TIME - $(date +%s) ))
     if [[ $TIME_REM -lt 0 ]]; then break; fi
+    # Set refresh rate
+    if $DYN_REFRESH; then REFRESH=`refresh_rate $TIME_REM`; fi
     sleep $REFRESH
   done
   echo ''
