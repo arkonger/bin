@@ -10,6 +10,7 @@ function print_help {
   echo -e '\t\t\timmediately'
   echo -e '\t-d, --date\tSet an expiration time using `date -d`'
   echo -e '\t-s, --start\tSet a custom start time to be parsed with `date -d`'
+  echo -e '\t-r, --refresh\tSet the refresh rate of the timer'
   echo -e '\t-p, --pomodoro\tStart in pomodoro mode'
   echo -e '\t-c, --compat\tStart in compatability mode, without depending'
   echo -e '\t\t\ton any specific font'
@@ -210,6 +211,7 @@ function squash {
 BELL=false
 FLASH=false
 COMPAT=false
+REFRESH=0.1
 POM=false
 # Don't allow pomodoro & date
 POM_DATE=false
@@ -309,6 +311,17 @@ for (( i=1; $i <= $#; i++ )); do
         echo "Exiting!"
         exit 1
       fi
+      ;;
+    # Set refresh rate
+    "-r" | "--refresh")
+      # Get the next argument
+      ((i++))
+      if [[ $i -gt $# ]]; then
+        echo -e "Error: No rate provided!\n"
+        print_help
+        exit 1
+      fi
+      REFRESH=${!i}
       ;;
     # Set the script to run in pomodoro mode
     "-p" | "--pomodoro")
@@ -518,7 +531,7 @@ if [[ -n $TIME ]]; then
     TIME_REM_1=$TIME_REM
     TIME_REM=$(( $END_TIME - $(date +%s) ))
     if [[ $TIME_REM -lt 0 ]]; then break; fi
-    sleep 0.1
+    sleep $REFRESH
   done
   echo ''
 fi
