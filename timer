@@ -9,6 +9,7 @@ function print_help {
   echo -e '\t\t\tIf this option is not provided, the timer will go off'
   echo -e '\t\t\timmediately'
   echo -e '\t-d, --date\tSet an expiration time using `date -d`'
+  echo -e '\t-s, --start\tSet a custom start time to be parsed with `date -d`'
   echo -e '\t-p, --pomodoro\tStart in pomodoro mode'
   echo -e '\t-c, --compat\tStart in compatability mode, without depending'
   echo -e '\t\t\ton any specific font'
@@ -110,7 +111,7 @@ function pomodoro {
   SHORT=${SHORT-0}
 
   # Build arg string for child processes
-  if [[ $TIME =~ ^$ ]]; then
+  if [[ -z $TIME ]]; then
     TIME=$((25 * 60))
   fi
   ARGS="-t ${TIME}s"
@@ -210,8 +211,10 @@ BELL=false
 FLASH=false
 COMPAT=false
 POM=false
-# Don't allow pomodoro & date TODO: make work as expected with -p
+# Don't allow pomodoro & date
 POM_DATE=false
+# Don't allow pomodoro & start
+POM_START=false
 
 # Input Parsing
 for (( i=1; $i <= $#; i++ )); do
@@ -254,22 +257,58 @@ for (( i=1; $i <= $#; i++ )); do
         exit 1
       fi
       # Get end time in seconds
-      END_SECS=$(date -d "${!i}" +%s)
+      END_TIME=$(date -d "${!i}" +%s)
       if [[ $? != 0 ]]; then
         echo -e "Error: Date failed! Exiting!\n"
         exit 1
       fi
-      # Get current time in seconds
-      NOW_SECS=$(date +%s)
+      # Get current time in seconds if start time not set
+      if [[ -z $START_TIME ]]; then
+        START_TIME=$(date +%s)
+      fi
       # Get time delta
-      SECS=$(echo "$END_SECS - $NOW_SECS" | bc)
-      if [[ $SECS -lt 0 ]]; then
+      TIME=$(($END_TIME - $START_TIME))
+      if [[ $TIME -lt 0 ]]; then
         echo "Error: It doesn't look like that time is in the future!"
         echo "Are you sure your formatting is correct?"
         echo "Exiting!"
         exit 1
       fi
-      get_time $SECS
+      ;;
+    # Set the time to count as start
+    "-s" | "--start")
+      # Check that pomodoro hasn't been set
+      if $POM_START; then
+        echo "Error: Pomodoro mode can't be used with --start!"
+        echo 'Exiting!'
+        exit 1
+      else
+        POM_START=true
+      fi
+      # Get the next argument, compute seconds with `date`
+      ((i++))
+      if [[ $i -gt $# ]]; then
+        echo -e "Error: No time provided!\n"
+        print_help
+        exit 1
+      fi
+      # Get start time in seconds
+      START_TIME=$(date -d "${!i}" +%s)
+      if [[ $? != 0 ]]; then
+        echo -e "Error: Date failed! Exiting!\n"
+        exit 1
+      fi
+      if [[ -z $END_TIME ]]; then
+        # Recalculate time delta
+        TIME=$(($END_TIME - $START_TIME))
+      fi
+      # Check that time is in past
+      if [[ $START_TIME -gt $(date +%s) ]]; then
+        echo "Error: It doesn't look like that time is in the past!"
+        echo "Are you sure your formatting is correct?"
+        echo "Exiting!"
+        exit 1
+      fi
       ;;
     # Set the script to run in pomodoro mode
     "-p" | "--pomodoro")
@@ -278,8 +317,13 @@ for (( i=1; $i <= $#; i++ )); do
         echo "Error: Pomodoro mode can't be used with --date!"
         echo 'Exiting!'
         exit 1
+      elif $POM_START; then
+        echo "Error: Pomodoro mode can't be used with --start!"
+        echo 'Exiting!'
+        exit 1
       else
         POM_DATE=true
+        POM_START=true
       fi
       POM=true
       POMS=0
@@ -436,11 +480,15 @@ function graceful_exit {
 
 if [[ -n $TIME ]]; then
   # Get start/end times using date:
-  START_TIME=$(date +%s)
-  END_TIME=$(($START_TIME + $TIME))
+  if [[ -z $START_TIME ]]; then
+    START_TIME=$(date +%s)
+  fi
+  if [[ -z $END_TIME ]]; then
+    END_TIME=$(($START_TIME + $TIME))
+  fi
 
-  # If not set, default to $TIME
-  TIME_REM=${TIME_REM-$TIME}
+  # Time until end time
+  TIME_REM=$(( $END_TIME - $(date +%s) ))
   # Set starting value to be changed later
   TS_LEN=0
 
