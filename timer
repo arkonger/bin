@@ -549,9 +549,10 @@ if [[ -n $TIME ]]; then
     if [[ $TS_LEN_1 -ne $TS_LEN || \
           ($TIME_REM -le $NEXT_REDRAW && $TIME_REM -ne $TIME_REM_1) \
        ]]; then
-      # Clear the line so that nothing is left from previous time strings
-      # TODO: Is there any reason to keep this line clear?
-      # echo -ne '\e[2K'
+      # Clear the previous time string
+      if [[ $TS_LEN_1 -ne $TS_LEN ]]; then
+        echo -ne '\e[1K'
+      fi
       TS_LEN=$TS_LEN_1
       print_progress_bar $TS_LEN
     fi
