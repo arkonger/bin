@@ -23,8 +23,8 @@ function print_help {
 function get_time {
   # Check that the time is in the correct format
   if [[ $1 =~ ^[[:digit:]]+[smhd]?$ ]]; then
-    local UNIT=`grep -o '[smhd]$' <(echo $1) || echo s`
-    TIME=`grep -Po '[[:digit:]]+' <(echo $1)`
+    local UNIT=$(grep -o '[smhd]$' <(echo $1) || echo s)
+    TIME=$(grep -Po '[[:digit:]]+' <(echo $1))
     
     # Convert time to seconds
     case $UNIT in
@@ -445,7 +445,7 @@ function print_progress_bar {
   # Width of the progress bar
   WIDTH=$(($COL - $1 - 2))
   # Number of filled bar segments
-  PROG=`dc -e "3 k $WIDTH 1 $TIME_REM $TIME / - * 0 k 1 / p"`
+  PROG=$(dc -e "3 k $WIDTH 1 $TIME_REM $TIME / - * 0 k 1 / p")
 
   # Progress bar string, which we echo at end of function
   BAR=""
@@ -508,7 +508,7 @@ function print_progress_bar {
   # PROG = WIDTH * (1 - TIME_REM / TIME)
   #   => TIME_REM = TIME * (1 - PROG / WIDTH)
   #   => NEXT_REDRAW = TIME * (1 - (PROG + 1) / WIDTH)
-  NEXT_REDRAW=`dc -e "3 k $TIME 1 $PROG 1 + $WIDTH / - * 0 k 1 / p"`
+  NEXT_REDRAW=$(dc -e "3 k $TIME 1 $PROG 1 + $WIDTH / - * 0 k 1 / p")
 }
 
 # Cancel gracefully without destroying the pretty progress bar
@@ -539,9 +539,9 @@ if [[ -n $TIME ]]; then
 
   while [[ $TIME_REM -ge 0 ]]; do
     # Formatted string of time remaining
-    TS=`time_string $TIME_REM`
+    TS=$(time_string $TIME_REM)
     # Length of time string
-    TS_LEN_1=`echo -n $TS | wc -m`
+    TS_LEN_1=$(echo -n $TS | wc -m)
 
     # The progress bar need only be redrawn when the length of the time string
     #   changes, or when the bar needs to be updated. The latter is set by
@@ -564,7 +564,7 @@ if [[ -n $TIME ]]; then
     TIME_REM=$(( $END_TIME - $(date +%s) ))
     if [[ $TIME_REM -lt 0 ]]; then break; fi
     # Set refresh rate
-    if $DYN_REFRESH; then REFRESH=`refresh_rate $TIME_REM`; fi
+    if $DYN_REFRESH; then REFRESH=$(refresh_rate $TIME_REM); fi
     sleep $REFRESH
   done
   echo ''
